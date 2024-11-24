@@ -6,3 +6,7 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+[context.production.environment]
+  VITE_SUPABASE_URL = "https://ucrepvdzkqcixrqikizw.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVjcmVwdmR6a3FjaXhycWlraXp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzI0MzY4MjksImV4cCI6MjA0ODAxMjgyOX0.4V4OBT6fmTNNvLg3sY1-v8zQdoWgbS2L4i1ZVLStiPo"
