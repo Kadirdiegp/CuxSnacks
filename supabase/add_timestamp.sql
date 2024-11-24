@@ -1,0 +1,3 @@
+-- Füge created_at Spalte hinzu
+ALTER TABLE products
+ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
