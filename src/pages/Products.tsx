@@ -1,44 +1,55 @@
-import React from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAuthStore } from '../store/authStore';
 import ProductCard from '../components/ProductCard';
 import ProductFilters from '../components/ProductFilters';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { useProducts } from '../hooks/useProducts';
+import { supabase } from '../lib/supabaseClient';
+import { Product } from '../types/product';
 
 export default function Products() {
+  const { user } = useAuthStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const categoryParam = searchParams.get('category');
   
-  const [selectedCategory, setSelectedCategory] = React.useState<string | null>(categoryParam);
-  const [priceRange, setPriceRange] = React.useState({
-    min: 0,
-    max: 100
-  });
-  const [searchQuery, setSearchQuery] = React.useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(categoryParam);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const { data: products, isLoading, error } = useProducts();
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setIsLoading(true);
+        let query = supabase.from('products').select('*');
+        
+        if (selectedCategory) {
+          query = query.eq('category', selectedCategory);
+        }
 
-  const maxPrice = React.useMemo(() => {
-    if (!products) return 0;
-    return Math.max(...products.map(p => p.price));
-  }, [products]);
+        const { data, error: supabaseError } = await query;
 
-  const filteredProducts = React.useMemo(() => {
-    if (!products) return [];
-    return products.filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = !selectedCategory || product.category_name === selectedCategory;
-      const matchesPrice = product.price >= priceRange.min && 
-        product.price <= priceRange.max;
-      return matchesSearch && matchesCategory && matchesPrice;
-    });
-  }, [products, selectedCategory, priceRange, searchQuery]);
+        if (supabaseError) {
+          throw supabaseError;
+        }
 
-  // Update URL when category changes
-  React.useEffect(() => {
+        setProducts(data || []);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching products:', err);
+        setError('Fehler beim Laden der Produkte');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, [selectedCategory]);
+
+  useEffect(() => {
     if (selectedCategory) {
       searchParams.set('category', selectedCategory);
     } else {
@@ -47,40 +58,67 @@ export default function Products() {
     setSearchParams(searchParams);
   }, [selectedCategory, searchParams, setSearchParams]);
 
-  if (isLoading) return <LoadingSpinner />;
-  if (error) return <div className="text-center py-12 text-red-500">Error loading products</div>;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="bg-red-500/10 border border-red-500 text-red-500 p-4 rounded-lg">
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const filteredProducts = products.filter(product => {
+    const matchesCategory = !selectedCategory || product.category === selectedCategory;
+    const matchesSearch = !searchQuery || 
+      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      product.description.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
 
   return (
-    <div className="min-h-screen bg-zinc-950 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Filters */}
-          <div className="lg:w-1/4">
-            <ProductFilters
-              minPrice={priceRange.min}
-              maxPrice={priceRange.max}
-              setMinPrice={(price) => setPriceRange(prev => ({ ...prev, min: price }))}
-              setMaxPrice={(price) => setPriceRange(prev => ({ ...prev, max: price }))}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              selectedCategory={selectedCategory}
-              setSelectedCategory={setSelectedCategory}
-            />
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="flex flex-col md:flex-row gap-8">
+        <div className="w-full md:w-64">
+          <ProductFilters 
+            selectedCategory={selectedCategory} 
+            onCategoryChange={setSelectedCategory}
+          />
+        </div>
+
+        <div className="flex-1">
+          <div className="mb-6">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Produkt suchen..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-zinc-800 rounded-lg bg-zinc-900 text-white placeholder-zinc-400 focus:outline-none focus:border-blue-500"
+              />
+              <Search className="absolute left-3 top-2.5 h-5 w-5 text-zinc-400" />
+            </div>
           </div>
 
-          {/* Product Grid */}
-          <div className="lg:w-3/4">
+          {filteredProducts.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-zinc-400">Keine Produkte gefunden.</p>
+            </div>
+          ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredProducts.map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard key={product.id} product={product} isLoggedIn={!!user} />
               ))}
             </div>
-            {filteredProducts.length === 0 && (
-              <div className="text-center py-12 text-zinc-400">
-                Keine Produkte gefunden
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </div>
     </div>

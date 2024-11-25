@@ -1,174 +1,127 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, Star } from 'lucide-react';
+import { ShoppingCart } from 'lucide-react';
+import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
-import CartNotification from './CartNotification';
-
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  description: string;
-  image?: string;
-  discount?: number;
-  featured?: boolean;
-}
+import { formatPrice } from '../utils/formatPrice';
+import { Product } from '../types/product';
+import Modal from './Modal';
 
 interface ProductCardProps {
   product: Product;
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
-  const addToCart = useCartStore((state) => state.addToCart);
-  const [isHovered, setIsHovered] = useState(false);
-  const [showNotification, setShowNotification] = useState(false);
-  const [isAdding, setIsAdding] = useState(false);
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const addToCart = useCartStore(state => state.addToCart);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [isCartAnimating, setIsCartAnimating] = useState(false);
 
-  const handleAddToCart = async () => {
-    setIsAdding(true);
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     
-    addToCart({
-      id: product.id,
-      name: product.name,
-      price: product.discount 
-        ? product.price * (1 - product.discount / 100)
-        : product.price,
-      image: product.image,
-    });
+    if (!user) {
+      setShowLoginModal(true);
+      return;
+    }
 
-    // Animation und Benachrichtigung
-    setTimeout(() => {
-      setIsAdding(false);
-      setShowNotification(true);
-      setTimeout(() => setShowNotification(false), 3000);
-    }, 500);
+    addToCart(product);
+    setIsCartAnimating(true);
+    setTimeout(() => setIsCartAnimating(false), 500);
   };
 
-  const formattedPrice = new Intl.NumberFormat('de-DE', {
-    style: 'currency',
-    currency: 'EUR'
-  }).format(product.price);
-
-  const discountedPrice = product.discount
-    ? product.price * (1 - product.discount / 100)
-    : product.price;
-
-  const formattedDiscountedPrice = new Intl.NumberFormat('de-DE', {
-    style: 'currency',
-    currency: 'EUR'
-  }).format(discountedPrice);
+  const handleLoginClick = () => {
+    setShowLoginModal(false);
+    navigate('/login', { state: { from: '/products' } });
+  };
 
   return (
     <>
-      <CartNotification
-        show={showNotification}
-        productName={product.name}
-        onClose={() => setShowNotification(false)}
-      />
-      
       <motion.div
-        layout
-        whileHover={{ y: -5 }}
-        onHoverStart={() => setIsHovered(true)}
-        onHoverEnd={() => setIsHovered(false)}
-        className="relative bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden group"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-zinc-900 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300"
       >
-        {/* Discount Badge */}
-        {product.discount && (
-          <div className="absolute top-4 left-4 z-10">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="bg-red-500 text-white text-sm font-medium px-2 py-1 rounded-lg"
-            >
-              -{product.discount}%
-            </motion.div>
-          </div>
-        )}
-
-        {/* Featured Badge */}
-        {product.featured && (
-          <div className="absolute top-4 right-4 z-10">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="flex items-center space-x-1 bg-yellow-500 text-black text-sm font-medium px-2 py-1 rounded-lg"
-            >
-              <Star className="w-4 h-4" />
-              <span>Featured</span>
-            </motion.div>
-          </div>
-        )}
-
-        {/* Product Image */}
-        <div className="aspect-square relative">
+        <div className="relative cursor-pointer group">
           {product.image && (
-            <img
-              src={product.image}
-              alt={product.name}
-              className="w-full h-full object-cover"
-            />
+            <div className="relative aspect-square">
+              <img
+                src={product.image}
+                alt={product.name}
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+              {!user && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                  <p className="text-white text-center px-4">
+                    Melden Sie sich an, um Preise zu sehen
+                  </p>
+                </div>
+              )}
+            </div>
           )}
+        </div>
+
+        <div className="p-4">
+          <h3 className="text-lg font-semibold text-white mb-2">{product.name}</h3>
+          <p className="text-zinc-400 text-sm mb-4 line-clamp-2">{product.description}</p>
           
-          {/* Add to Cart Button - Desktop */}
-          <div className="hidden md:block">
-            <motion.div
-              initial={false}
-              animate={{ opacity: isHovered ? 1 : 0 }}
-              className="absolute inset-0 bg-black/60 flex items-center justify-center"
-            >
+          {user ? (
+            <div className="flex items-center justify-between">
+              <span className="text-white font-bold">{formatPrice(product.price)}</span>
               <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
                 onClick={handleAddToCart}
-                disabled={isAdding}
-                className="bg-white text-black px-4 py-2 rounded-lg font-medium flex items-center space-x-2 disabled:opacity-50"
+                className="bg-white text-black px-4 py-2 rounded-lg hover:bg-zinc-200 transition-colors duration-300 flex items-center gap-2"
+                whileTap={{ scale: 0.95 }}
               >
                 <motion.div
-                  animate={isAdding ? { rotate: 360 } : {}}
+                  animate={isCartAnimating ? { rotate: 360 } : {}}
                   transition={{ duration: 0.5 }}
                 >
-                  <ShoppingCart className="w-4 h-4" />
+                  <ShoppingCart className="w-5 h-5" />
                 </motion.div>
-                <span>{isAdding ? 'Wird hinzugefügt...' : 'In den Warenkorb'}</span>
+                In den Warenkorb
               </motion.button>
-            </motion.div>
-          </div>
-
-          {/* Add to Cart Button - Mobile */}
-          <div className="md:hidden absolute bottom-0 left-0 right-0 p-2 bg-black/60">
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={handleAddToCart}
-              disabled={isAdding}
-              className="w-full bg-white text-black py-2 rounded-lg font-medium flex items-center justify-center space-x-2 disabled:opacity-50"
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowLoginModal(true)}
+              className="w-full bg-white text-black px-4 py-2 rounded-lg hover:bg-zinc-200 transition-colors duration-300"
             >
-              <motion.div
-                animate={isAdding ? { rotate: 360 } : {}}
-                transition={{ duration: 0.5 }}
-              >
-                <ShoppingCart className="w-4 h-4" />
-              </motion.div>
-              <span>{isAdding ? 'Wird hinzugefügt...' : 'In den Warenkorb'}</span>
-            </motion.button>
-          </div>
-        </div>
-
-        {/* Product Info */}
-        <div className="p-4">
-          <h3 className="font-medium text-lg mb-2">{product.name}</h3>
-          <div className="flex items-center space-x-2">
-            {product.discount ? (
-              <>
-                <span className="text-zinc-400 line-through">{formattedPrice}</span>
-                <span className="font-medium">{formattedDiscountedPrice}</span>
-              </>
-            ) : (
-              <span className="font-medium">{formattedPrice}</span>
-            )}
-          </div>
+              Jetzt anmelden
+            </button>
+          )}
         </div>
       </motion.div>
+
+      <AnimatePresence>
+        {showLoginModal && (
+          <Modal
+            title="Anmeldung erforderlich"
+            onClose={() => setShowLoginModal(false)}
+          >
+            <p className="mb-4">
+              Bitte melden Sie sich an, um Preise zu sehen und Produkte in den Warenkorb zu legen.
+            </p>
+            <div className="flex justify-end gap-4">
+              <button
+                onClick={() => setShowLoginModal(false)}
+                className="px-4 py-2 text-zinc-400 hover:text-white transition-colors duration-300"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={handleLoginClick}
+                className="bg-white text-black px-4 py-2 rounded-lg hover:bg-zinc-200 transition-colors duration-300"
+              >
+                Zur Anmeldung
+              </button>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
     </>
   );
 }

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuthStore } from '../store/useAuthStore';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { useAuthStore } from '../store/authStore';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -9,7 +9,16 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const signIn = useAuthStore((state) => state.signIn);
+  const location = useLocation();
+  const { signIn, isAuthenticated } = useAuthStore();
+
+  // Überprüfe, ob der Benutzer bereits angemeldet ist
+  useEffect(() => {
+    if (isAuthenticated) {
+      const from = location.state?.from || '/';
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, navigate, location]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,14 +26,10 @@ export default function Login() {
     setError('');
 
     try {
-      const { error: signInError } = await signIn(email, password);
-      if (signInError) {
-        setError(signInError.message);
-      } else {
-        navigate('/');
-      }
+      await signIn(email, password);
+      // Die Weiterleitung erfolgt automatisch durch den useEffect Hook
     } catch (err) {
-      setError('Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
+      setError('Ungültige E-Mail oder Passwort.');
     } finally {
       setIsLoading(false);
     }

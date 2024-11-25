@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCartStore } from '../store/cartStore';
-import { useAuthStore } from '../store/useAuthStore';
+import { useAuthStore } from '../store/authStore';
 import { useOrders } from '../hooks/useOrders';
+import { sendOrderConfirmationEmail, formatOrderDetailsForEmail } from '../lib/emailConfig';
 import { motion } from 'framer-motion';
 import { Trash2, Plus, Minus, AlertCircle, CheckCircle } from 'lucide-react';
-import { DeliveryAddress, DELIVERY_FEE, MIN_ORDER_AMOUNT, DELIVERY_HOURS, ALLOWED_CITIES } from '../types/order';
+import { DeliveryAddress, DELIVERY_HOURS, ALLOWED_CITIES } from '../types/order';
+import { MINIMUM_ORDER_AMOUNT, DELIVERY_FEE, calculateRemainingAmount } from '../constants/cart';
 
 interface CheckoutForm {
   street: string;
@@ -32,12 +34,22 @@ export default function Cart() {
   });
 
   const { items, removeFromCart, updateQuantity, clearCart } = useCartStore();
-  const user = useAuthStore((state) => state.user);
+  const { user, isAuthenticated } = useAuthStore();
   const { createOrder } = useOrders();
   const navigate = useNavigate();
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = subtotal + DELIVERY_FEE;
+  const remainingAmount = calculateRemainingAmount(subtotal);
+
+  if (!items.length) {
+    return (
+      <div className="text-center py-12">
+        <h2 className="text-2xl font-medium mb-4">Ihr Warenkorb ist leer</h2>
+        <p className="text-zinc-400 mb-8">Fügen Sie einige Produkte hinzu, um fortzufahren.</p>
+      </div>
+    );
+  }
 
   const isDeliveryTime = () => {
     const now = new Date();
@@ -72,16 +84,15 @@ export default function Cart() {
     return true;
   };
 
+  const handleShowCheckoutForm = () => {
+    setShowCheckoutForm(true);
+  };
+
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!user) {
-      navigate('/login');
-      return;
-    }
 
-    if (subtotal < MIN_ORDER_AMOUNT) {
-      setError(`Mindestbestellwert: ${MIN_ORDER_AMOUNT.toFixed(2)}€`);
+    if (subtotal < MINIMUM_ORDER_AMOUNT) {
+      setError(`Mindestbestellwert: ${MINIMUM_ORDER_AMOUNT.toFixed(2)}€`);
       return;
     }
 
@@ -98,31 +109,56 @@ export default function Cart() {
     setError(null);
 
     try {
-      await createOrder(items, total);
+      // Erstelle die Bestellung
+      const order = await createOrder(items, total);
+      console.log('Bestellung erstellt:', order);
+      
+      // Formatiere die Adresse
+      const deliveryAddress = `${formData.street} ${formData.houseNumber}, ${formData.postalCode} ${formData.city}`;
+
+      // Sende die Bestellbestätigung per E-Mail
+      const emailParams = {
+        to_email: user?.email || '',
+        order_number: order.id,
+        order_details: formatOrderDetailsForEmail(items),
+        total: total.toFixed(2),
+        customer_name: user?.user_metadata?.full_name || user?.email || '',
+        delivery_address: deliveryAddress
+      };
+
+      console.log('Sende Bestellbestätigung...', { email: user?.email });
+      const emailResult = await sendOrderConfirmationEmail(emailParams);
+      
+      if (!emailResult.success) {
+        console.error('E-Mail-Fehler:', emailResult.error);
+        // Zeige Fehlermeldung an, aber lasse den Bestellprozess weiterlaufen
+        setError('Bestellung wurde aufgenommen, aber die Bestätigungs-E-Mail konnte nicht gesendet werden.');
+      } else {
+        console.log('Bestellbestätigung wurde gesendet');
+      }
+
       clearCart();
       navigate('/profile');
     } catch (err) {
+      console.error('Checkout error:', err);
       setError(err instanceof Error ? err.message : 'Fehler beim Erstellen der Bestellung');
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (items.length === 0) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <h1 className="text-2xl font-bold mb-8">Warenkorb</h1>
-        <p className="text-zinc-400">Ihr Warenkorb ist leer.</p>
-      </div>
-    );
-  }
-
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <h1 className="text-2xl font-bold mb-8">Warenkorb</h1>
 
+      {remainingAmount > 0 && (
+        <div className="bg-blue-500/10 border border-blue-500 text-blue-500 p-4 rounded-lg mb-6">
+          <p>Noch {remainingAmount.toFixed(2)}€ bis zum Mindestbestellwert von {MINIMUM_ORDER_AMOUNT.toFixed(2)}€</p>
+        </div>
+      )}
+
       {error && (
-        <div className="bg-red-500 text-white p-4 rounded-lg mb-6 flex items-center space-x-2">
+        <div className="bg-red-500/10 border border-red-500 text-red-500 p-4 rounded-lg mb-6 flex items-center space-x-2">
           <AlertCircle className="w-5 h-5" />
           <p>{error}</p>
         </div>
@@ -203,9 +239,9 @@ export default function Cart() {
           </div>
         </div>
 
-        {subtotal < MIN_ORDER_AMOUNT && (
+        {subtotal < MINIMUM_ORDER_AMOUNT && (
           <div className="bg-yellow-500/10 text-yellow-500 p-4 rounded-lg mb-6 text-sm">
-            Mindestbestellwert: {MIN_ORDER_AMOUNT.toFixed(2)}€
+            Mindestbestellwert: {MINIMUM_ORDER_AMOUNT.toFixed(2)}€
           </div>
         )}
 
@@ -215,7 +251,18 @@ export default function Cart() {
           </div>
         )}
 
-        {showCheckoutForm ? (
+        {items.length > 0 && (
+          <div className="mt-6">
+            <button
+              onClick={handleShowCheckoutForm}
+              className="w-full bg-white text-black py-3 px-4 rounded-lg font-medium hover:bg-zinc-200 transition-colors"
+            >
+              Zur Kasse ({total.toFixed(2)}€)
+            </button>
+          </div>
+        )}
+
+        {showCheckoutForm && (
           <form onSubmit={handleCheckout} className="space-y-6">
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -340,26 +387,12 @@ export default function Cart() {
 
             <button
               type="submit"
-              disabled={isLoading || subtotal < MIN_ORDER_AMOUNT || !isDeliveryTime()}
+              disabled={isLoading || subtotal < MINIMUM_ORDER_AMOUNT || !isDeliveryTime()}
               className="w-full bg-white text-black py-3 rounded-lg font-medium hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Wird bearbeitet...' : 'Jetzt bestellen'}
             </button>
           </form>
-        ) : (
-          <button
-            onClick={() => setShowCheckoutForm(true)}
-            disabled={subtotal < MIN_ORDER_AMOUNT || !isDeliveryTime()}
-            className="w-full bg-white text-black py-3 rounded-lg font-medium hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Zur Kasse
-          </button>
-        )}
-
-        {!user && (
-          <p className="mt-4 text-sm text-zinc-400 text-center">
-            Bitte melden Sie sich an, um die Bestellung abzuschließen.
-          </p>
         )}
       </div>
     </div>

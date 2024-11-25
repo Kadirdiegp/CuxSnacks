@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
-import { useAuthStore } from '../store/useAuthStore';
+import { supabase } from '../lib/supabaseClient';
+import { useAuthStore } from '../store/authStore';
 
 export interface Order {
   id: string;
@@ -20,38 +20,11 @@ export function useOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const user = useAuthStore((state) => state.user);
+  const { user, isAuthenticated } = useAuthStore();
 
-  useEffect(() => {
-    if (!user) {
-      setOrders([]);
-      setLoading(false);
-      return;
-    }
-
-    const fetchOrders = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('orders')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-
-        setOrders(data || []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Fehler beim Laden der Bestellungen');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchOrders();
-  }, [user]);
-
-  const createOrder = async (items: Order['items'], total: number) => {
-    if (!user) {
-      throw new Error('Benutzer muss angemeldet sein');
+  const createOrder = async (items: any[], total: number) => {
+    if (!user || !isAuthenticated) {
+      throw new Error('Sie müssen angemeldet sein, um eine Bestellung aufzugeben.');
     }
 
     try {
@@ -69,13 +42,40 @@ export function useOrders() {
         .single();
 
       if (error) throw error;
-
       setOrders((prev) => [data, ...prev]);
       return data;
     } catch (err) {
-      throw new Error(err instanceof Error ? err.message : 'Fehler beim Erstellen der Bestellung');
+      console.error('Error creating order:', err);
+      throw new Error('Fehler beim Erstellen der Bestellung. Bitte versuchen Sie es später erneut.');
     }
   };
+
+  useEffect(() => {
+    if (!user || !isAuthenticated) {
+      setOrders([]);
+      setLoading(false);
+      return;
+    }
+
+    const fetchOrders = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        setOrders(data || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Fehler beim Laden der Bestellungen');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, [user, isAuthenticated]);
 
   return {
     orders,

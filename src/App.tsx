@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useAuthStore } from './store/useAuthStore';
-import { supabase } from './lib/supabaseClient';
+import { useAuthStore } from './store/authStore';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import LoadingScreen from './components/LoadingScreen';
@@ -17,27 +16,21 @@ import AdminDashboard from './pages/AdminDashboard';
 import About from './pages/About';
 import Contact from './pages/Contact';
 import ProtectedRoute from './components/ProtectedRoute';
+import AuthModal from './components/AuthModal';
 
 function App() {
-  const [isLoading, setIsLoading] = useState(true);
-  const setUser = useAuthStore((state) => state.setUser);
+  const { initialize, isLoading } = useAuthStore();
 
   useEffect(() => {
-    // Initial auth state
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setIsLoading(false);
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [setUser]);
+    const initAuth = async () => {
+      try {
+        await initialize();
+      } catch (error) {
+        console.error('Failed to initialize auth:', error);
+      }
+    };
+    initAuth();
+  }, []);
 
   if (isLoading) {
     return <LoadingScreen />;
@@ -52,10 +45,18 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/products" element={<Products />} />
             <Route path="/products/:id" element={<ProductDetail />} />
-            <Route path="/cart" element={<Cart />} />
+            <Route path="/cart" element={
+              <ProtectedRoute>
+                <Cart />
+              </ProtectedRoute>
+            } />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/profile" element={<Profile />} />
+            <Route path="/profile" element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            } />
             <Route path="/admin" element={<AdminLogin />} />
             <Route
               path="/admin/dashboard"
@@ -70,6 +71,7 @@ function App() {
           </Routes>
         </main>
         <Footer />
+        <AuthModal />
       </div>
     </Router>
   );

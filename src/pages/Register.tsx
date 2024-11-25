@@ -1,66 +1,62 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuthStore } from '../store/useAuthStore';
+import { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuthStore } from '../store/authStore';
 
 export default function Register() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: string })?.from || '/';
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate();
   const signUp = useAuthStore((state) => state.signUp);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     setError('');
 
     if (password !== confirmPassword) {
       setError('Die Passwörter stimmen nicht überein');
-      setIsLoading(false);
       return;
     }
 
+    setIsLoading(true);
+
     try {
-      const { error: signUpError } = await signUp(email, password);
-      if (signUpError) {
-        setError(signUpError.message);
-      } else {
-        navigate('/login');
-      }
+      await signUp(email, password);
+      navigate(from);
     } catch (err) {
-      setError('Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
+      setError(err instanceof Error ? err.message : 'Ein Fehler ist aufgetreten');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-md w-full space-y-8 bg-zinc-900 p-8 rounded-xl"
-      >
+    <div className="min-h-[80vh] flex items-center justify-center px-4">
+      <div className="max-w-md w-full space-y-8 bg-zinc-900 p-8 rounded-xl">
         <div>
-          <h2 className="text-3xl font-bold text-white text-center">
+          <h2 className="text-center text-3xl font-bold text-white">
             Registrieren
           </h2>
-          <p className="mt-2 text-center text-zinc-400">
-            Erstellen Sie ein neues Konto
+          <p className="mt-2 text-center text-sm text-zinc-400">
+            Erstellen Sie ein Konto, um Zugriff auf alle Preise zu erhalten und Produkte in den Warenkorb legen zu können.
           </p>
         </div>
-        {error && (
-          <div className="bg-red-500/10 text-red-500 p-4 rounded-lg text-center">
-            {error}
-          </div>
-        )}
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {error && (
+            <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded-md">
+              {error}
+            </div>
+          )}
+
           <div className="space-y-4">
             <div>
-              <label htmlFor="email" className="text-white">
+              <label htmlFor="email" className="block text-sm font-medium text-zinc-400">
                 E-Mail
               </label>
               <input
@@ -69,12 +65,12 @@ export default function Register() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="appearance-none relative block w-full px-3 py-2 mt-1 border border-zinc-800 bg-zinc-900 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20"
-                disabled={isLoading}
+                className="mt-1 block w-full rounded-md border-zinc-700 bg-zinc-800 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
+
             <div>
-              <label htmlFor="password" className="text-white">
+              <label htmlFor="password" className="block text-sm font-medium text-zinc-400">
                 Passwort
               </label>
               <input
@@ -83,44 +79,46 @@ export default function Register() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="appearance-none relative block w-full px-3 py-2 mt-1 border border-zinc-800 bg-zinc-900 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20"
-                disabled={isLoading}
+                className="mt-1 block w-full rounded-md border-zinc-700 bg-zinc-800 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
+
             <div>
-              <label htmlFor="confirm-password" className="text-white">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-zinc-400">
                 Passwort bestätigen
               </label>
               <input
-                id="confirm-password"
+                id="confirmPassword"
                 type="password"
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="appearance-none relative block w-full px-3 py-2 mt-1 border border-zinc-800 bg-zinc-900 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20"
-                disabled={isLoading}
+                className="mt-1 block w-full rounded-md border-zinc-700 bg-zinc-800 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
           </div>
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            type="submit"
-            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-black bg-white hover:bg-zinc-100 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={isLoading}
-          >
-            {isLoading ? 'Wird registriert...' : 'Registrieren'}
-          </motion.button>
+          <div>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? 'Wird registriert...' : 'Registrieren'}
+            </button>
+          </div>
 
-          <p className="text-center text-zinc-400">
-            Bereits ein Konto?{' '}
-            <Link to="/login" className="text-white hover:underline">
-              Anmelden
-            </Link>
-          </p>
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => navigate('/login', { state: { from } })}
+              className="text-sm text-zinc-400 hover:text-white"
+            >
+              Bereits ein Konto? Jetzt anmelden
+            </button>
+          </div>
         </form>
-      </motion.div>
+      </div>
     </div>
   );
 }

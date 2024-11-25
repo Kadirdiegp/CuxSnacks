@@ -3,42 +3,35 @@ import { useParams } from 'react-router-dom';
 import { Star, ShoppingCart, Truck, Shield } from 'lucide-react';
 import { Product } from '../types';
 import { useCartStore } from '../store/cartStore';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabaseClient';
+import { useAuthStore } from '../store/authStore';
+import { formatPrice } from '../utils/formatPrice';
 
 export default function ProductDetail() {
   const { id } = useParams();
   const [product, setProduct] = React.useState<Product | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [quantity, setQuantity] = React.useState(1);
-  const addItem = useCartStore((state) => state.addItem);
+  const addToCart = useCartStore((state) => state.addToCart);
+  const { user } = useAuthStore();
 
   React.useEffect(() => {
     fetchProduct();
   }, [id]);
 
   const fetchProduct = async () => {
+    if (!id) return;
+    
     try {
-      // First fetch the product
-      const { data: productData, error: productError } = await supabase
+      const { data, error } = await supabase
         .from('products')
         .select('*')
         .eq('id', id)
         .single();
       
-      if (productError) throw productError;
-
-      // Then fetch reviews for the product
-      const { data: reviews, error: reviewsError } = await supabase
-        .from('reviews')
-        .select('*')
-        .eq('product_id', id);
+      if (error) throw error;
       
-      if (reviewsError) throw reviewsError;
-      
-      setProduct({
-        ...productData,
-        reviews: reviews || []
-      });
+      setProduct(data);
     } catch (error) {
       console.error('Error fetching product:', error);
     } finally {
@@ -46,10 +39,20 @@ export default function ProductDetail() {
     }
   };
 
+  const handleAddToCart = async () => {
+    if (!product) return;
+    
+    try {
+      await addToCart(product);
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+    }
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+      <div className="flex justify-center items-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
   }
@@ -57,129 +60,107 @@ export default function ProductDetail() {
   if (!product) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Product not found.</p>
+        <h2 className="text-2xl font-bold text-white">Produkt nicht gefunden</h2>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="space-y-4">
+        {/* Product Image */}
+        <div className="relative aspect-square rounded-lg overflow-hidden bg-zinc-900">
           <img
             src={product.image}
             alt={product.name}
-            className="w-full h-96 object-cover rounded-xl"
+            className="w-full h-full object-cover"
           />
-          <div className="grid grid-cols-4 gap-2">
-            {[...Array(4)].map((_, i) => (
-              <img
-                key={i}
-                src={product.image}
-                alt={`${product.name} thumbnail ${i + 1}`}
-                className="w-full h-24 object-cover rounded-lg cursor-pointer hover:opacity-75 transition-opacity"
-              />
-            ))}
-          </div>
+          {product.discount && product.discount > 0 && user && (
+            <div className="absolute top-4 right-4 bg-red-500 text-white px-3 py-1 rounded-md">
+              -{product.discount}%
+            </div>
+          )}
         </div>
 
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">{product.name}</h1>
-            <div className="flex items-center space-x-2 mt-2">
-              <div className="flex items-center">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    className={`h-5 w-5 ${
-                      i < Math.floor(product.rating)
-                        ? 'text-yellow-400 fill-current'
-                        : 'text-gray-300'
-                    }`}
-                  />
-                ))}
-              </div>
-              <span className="text-gray-500">
-                ({product.reviews.length} reviews)
-              </span>
-            </div>
-          </div>
+        {/* Product Info */}
+        <div className="flex flex-col">
+          <h1 className="text-3xl font-bold text-white mb-4">{product.name}</h1>
+          <p className="text-zinc-400 mb-6">{product.description}</p>
 
-          <p className="text-gray-600">{product.description}</p>
-
-          <div className="flex items-center justify-between">
-            <span className="text-3xl font-bold text-emerald-600">
-              ${product.price.toFixed(2)}
-            </span>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                className="px-3 py-1 border rounded-lg"
-              >
-                -
-              </button>
-              <span className="w-12 text-center">{quantity}</span>
-              <button
-                onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}
-                className="px-3 py-1 border rounded-lg"
-              >
-                +
-              </button>
-            </div>
-          </div>
-
-          <button
-            onClick={() => addItem(product, quantity)}
-            disabled={product.stock === 0}
-            className="w-full flex items-center justify-center space-x-2 bg-emerald-600 text-white px-6 py-3 rounded-lg hover:bg-emerald-700 transition-colors disabled:bg-gray-400"
-          >
-            <ShoppingCart className="h-5 w-5" />
-            <span>{product.stock > 0 ? 'Add to Cart' : 'Out of Stock'}</span>
-          </button>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center space-x-2">
-              <Truck className="h-5 w-5 text-emerald-600" />
-              <span className="text-sm text-gray-600">Free Shipping</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Shield className="h-5 w-5 text-emerald-600" />
-              <span className="text-sm text-gray-600">Secure Payment</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-12">
-        <h2 className="text-2xl font-bold mb-6">Customer Reviews</h2>
-        {product.reviews.length === 0 ? (
-          <p className="text-gray-500">No reviews yet.</p>
-        ) : (
-          <div className="space-y-6">
-            {product.reviews.map((review) => (
-              <div key={review.id} className="border-b pb-6">
-                <div className="flex items-center space-x-2 mb-2">
-                  <div className="flex items-center">
-                    {[...Array(5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`h-4 w-4 ${
-                          i < review.rating
-                            ? 'text-yellow-400 fill-current'
-                            : 'text-gray-300'
-                        }`}
-                      />
-                    ))}
+          {user ? (
+            <>
+              <div className="mb-6">
+                {product.discount && product.discount > 0 ? (
+                  <div className="flex items-center space-x-4">
+                    <span className="text-3xl font-bold text-red-500">
+                      {formatPrice(product.price * (1 - product.discount / 100))}
+                    </span>
+                    <span className="text-xl text-zinc-500 line-through">
+                      {formatPrice(product.price)}
+                    </span>
                   </div>
-                  <span className="text-sm text-gray-500">
-                    {new Date(review.createdAt).toLocaleDateString()}
+                ) : (
+                  <span className="text-3xl font-bold text-white">
+                    {formatPrice(product.price)}
                   </span>
-                </div>
-                <p className="text-gray-600">{review.comment}</p>
+                )}
               </div>
-            ))}
+
+              <div className="flex items-center space-x-4 mb-6">
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    className="bg-zinc-800 text-white px-3 py-2 rounded-md hover:bg-zinc-700"
+                  >
+                    -
+                  </button>
+                  <span className="text-white text-lg font-medium w-12 text-center">
+                    {quantity}
+                  </span>
+                  <button
+                    onClick={() => setQuantity(quantity + 1)}
+                    className="bg-zinc-800 text-white px-3 py-2 rounded-md hover:bg-zinc-700"
+                  >
+                    +
+                  </button>
+                </div>
+                <button
+                  onClick={handleAddToCart}
+                  className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2"
+                >
+                  <ShoppingCart size={20} />
+                  <span>In den Warenkorb</span>
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="mb-6 text-center">
+              <p className="text-zinc-400 mb-4">
+                Bitte melden Sie sich an, um Preise zu sehen und Produkte in den Warenkorb zu legen.
+              </p>
+              <button
+                onClick={() => useAuthStore.getState().setShowAuthModal(true)}
+                className="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Jetzt anmelden
+              </button>
+            </div>
+          )}
+
+          {/* Additional Info */}
+          <div className="border-t border-zinc-800 pt-6 mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center space-x-3 text-zinc-400">
+                <Truck size={20} />
+                <span>Kostenloser Versand ab 50€</span>
+              </div>
+              <div className="flex items-center space-x-3 text-zinc-400">
+                <Shield size={20} />
+                <span>Sichere Bezahlung</span>
+              </div>
+            </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

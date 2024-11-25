@@ -40,6 +40,8 @@ export default function AdminDashboard() {
   const [newProduct, setNewProduct] = useState<Partial<Product>>({});
   const [newCategory, setNewCategory] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchProducts();
@@ -132,25 +134,62 @@ export default function AdminDashboard() {
   };
 
   const handleProductSave = async (product: Partial<Product>) => {
-    if (editingProduct) {
-      const { error } = await supabase
-        .from('products')
-        .update(product)
-        .eq('id', editingProduct.id);
-      if (error) console.error('Error updating product:', error);
-      else {
-        fetchProducts();
-        setEditingProduct(null);
+    setLoading(true);
+    try {
+      if (editingProduct) {
+        // Aktualisiere ein bestehendes Produkt
+        const { error } = await supabase
+          .from('products')
+          .update({
+            name: product.name,
+            price: product.price,
+            description: product.description,
+            category_id: product.category_id,
+            image: product.image,
+            featured: product.featured,
+            discount: product.discount
+          })
+          .eq('id', editingProduct.id);
+
+        if (error) {
+          console.error('Error updating product:', error);
+          alert('Fehler beim Aktualisieren des Produkts');
+        } else {
+          await fetchProducts();
+          setEditingProduct(null);
+        }
+      } else {
+        // Erstelle ein neues Produkt
+        const { error } = await supabase
+          .from('products')
+          .insert([product]);
+
+        if (error) {
+          console.error('Error creating product:', error);
+          alert('Fehler beim Erstellen des Produkts');
+        } else {
+          await fetchProducts();
+          setNewProduct({});
+        }
       }
+    } catch (error) {
+      console.error('Error saving product:', error);
+      alert('Ein Fehler ist aufgetreten');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteProduct = async (id: number) => {
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting product:', error);
     } else {
-      const { error } = await supabase
-        .from('products')
-        .insert([product]);
-      if (error) console.error('Error creating product:', error);
-      else {
-        fetchProducts();
-        setNewProduct({});
-      }
+      fetchProducts();
     }
   };
 
@@ -406,9 +445,9 @@ export default function AdminDashboard() {
                             discount: parseInt(e.target.value),
                           })
                         }
+                        className="w-20 bg-transparent text-white focus:outline-none"
                         min="0"
                         max="100"
-                        className="w-20 bg-transparent text-white focus:outline-none"
                       />
                       <span className="text-zinc-400">%</span>
                     </div>
@@ -482,134 +521,109 @@ export default function AdminDashboard() {
             </div>
 
             <div className="bg-zinc-800 p-6 rounded-xl">
-              <h2 className="text-xl font-semibold text-white mb-4">
-                Produkte verwalten
-              </h2>
-              <div className="space-y-4">
-                {products.map((product) => (
-                  <div
-                    key={product.id}
-                    className="bg-zinc-900 p-4 rounded-lg flex items-center justify-between"
-                  >
-                    {editingProduct?.id === product.id ? (
-                      <div className="flex-1 grid grid-cols-5 gap-4">
-                        <input
-                          type="text"
-                          value={editingProduct.name}
-                          onChange={(e) =>
-                            setEditingProduct({
-                              ...editingProduct,
-                              name: e.target.value,
-                            })
-                          }
-                          className="bg-zinc-800 text-white p-2 rounded"
-                        />
-                        <input
-                          type="number"
-                          value={editingProduct.price}
-                          onChange={(e) =>
-                            setEditingProduct({
-                              ...editingProduct,
-                              price: parseFloat(e.target.value),
-                            })
-                          }
-                          className="bg-zinc-800 text-white p-2 rounded"
-                        />
-                        <textarea
-                          value={editingProduct.description}
-                          onChange={(e) =>
-                            setEditingProduct({
-                              ...editingProduct,
-                              description: e.target.value,
-                            })
-                          }
-                          className="bg-zinc-800 text-white p-2 rounded col-span-2"
-                          rows={3}
-                        />
-                        <select
-                          value={editingProduct.category_id}
-                          onChange={(e) =>
-                            setEditingProduct({
-                              ...editingProduct,
-                              category_id: parseInt(e.target.value),
-                            })
-                          }
-                          className="bg-zinc-800 text-white p-2 rounded"
-                        >
-                          {categories.map((category) => (
-                            <option key={category.id} value={category.id}>
-                              {category.name}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="col-span-2 grid grid-cols-2 gap-4">
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="featured"
-                              checked={editingProduct.featured || false}
-                              onChange={(e) =>
-                                setEditingProduct({ ...editingProduct, featured: e.target.checked })
-                              }
-                              className="bg-zinc-900 text-blue-600 rounded"
-                            />
-                            <label htmlFor="featured" className="text-white">Featured Produkt</label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="number"
-                              placeholder="Rabatt %"
-                              value={editingProduct.discount || ''}
-                              onChange={(e) =>
-                                setEditingProduct({
-                                  ...editingProduct,
-                                  discount: parseInt(e.target.value),
-                                })
-                              }
-                              className="bg-zinc-900 text-white p-2 rounded w-24"
-                              min="0"
-                              max="100"
-                            />
-                            <span className="text-white">% Rabatt</span>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => handleProductSave(editingProduct)}
-                          className="bg-green-600 text-white p-2 rounded flex items-center justify-center gap-2"
-                        >
-                          <Save className="w-4 h-4" />
-                          Speichern
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex-1">
-                          <h3 className="text-white font-medium">{product.name}</h3>
-                          <p className="text-zinc-400">
-                            {product.price.toFixed(2)} €
-                          </p>
-                          <p className="text-zinc-400">
-                            Erstellt am: {product.created_at}
-                          </p>
-                        </div>
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => setEditingProduct(product)}
-                            className="p-2 text-blue-400 hover:text-blue-300"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleProductDelete(product.id)}
-                            className="p-2 text-red-400 hover:text-red-300"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </>
-                    )}
+              <div className="flex flex-col space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xl font-semibold text-white">
+                    Produktverwaltung
+                  </h2>
+                  <input
+                    type="text"
+                    placeholder="Produkt suchen..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="bg-zinc-900 text-white p-2 rounded-lg border border-zinc-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all w-64"
+                  />
+                </div>
+
+                {/* Kategorie-Tabs */}
+                <div className="border-b border-zinc-700">
+                  <div className="flex space-x-1 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-800">
+                    <button
+                      onClick={() => setSelectedCategory(null)}
+                      className={`px-4 py-2 rounded-t-lg transition-colors whitespace-nowrap ${
+                        selectedCategory === null
+                          ? 'bg-blue-500 text-white'
+                          : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      Alle Produkte
+                    </button>
+                    {categories.map((category) => (
+                      <button
+                        key={category.id}
+                        onClick={() => setSelectedCategory(category.id)}
+                        className={`px-4 py-2 rounded-t-lg transition-colors whitespace-nowrap ${
+                          selectedCategory === category.id
+                            ? 'bg-blue-500 text-white'
+                            : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+                        }`}
+                      >
+                        {category.name}
+                      </button>
+                    ))}
                   </div>
-                ))}
+                </div>
+
+                {/* Produktliste */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {products
+                    .filter(product => 
+                      (!selectedCategory || product.category_id === selectedCategory) &&
+                      (!searchQuery || 
+                        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        product.description.toLowerCase().includes(searchQuery.toLowerCase())
+                      )
+                    )
+                    .map((product) => (
+                      <motion.div
+                        key={product.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-zinc-700 p-4 rounded-lg hover:bg-zinc-600 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            {product.image && (
+                              <div className="h-20 w-20 rounded-lg overflow-hidden flex-shrink-0">
+                                <img
+                                  src={product.image}
+                                  alt={product.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-white font-medium truncate">{product.name}</h3>
+                              <p className="text-zinc-400 text-sm">{categories.find(c => c.id === product.category_id)?.name}</p>
+                              <div className="flex items-center space-x-2">
+                                <p className="text-zinc-300">{product.price.toFixed(2)} €</p>
+                                {product.featured && (
+                                  <span className="bg-blue-500 text-xs text-white px-2 py-1 rounded">Featured</span>
+                                )}
+                                {product.discount > 0 && (
+                                  <span className="bg-green-500 text-xs text-white px-2 py-1 rounded">{product.discount}% Rabatt</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2 ml-4">
+                            <button
+                              onClick={() => setEditingProduct(product)}
+                              className="p-2 text-blue-500 hover:text-blue-400 transition-colors rounded-lg hover:bg-zinc-500"
+                            >
+                              <Edit className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => deleteProduct(product.id)}
+                              className="p-2 text-red-500 hover:text-red-400 transition-colors rounded-lg hover:bg-zinc-500"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                </div>
               </div>
             </div>
           </div>

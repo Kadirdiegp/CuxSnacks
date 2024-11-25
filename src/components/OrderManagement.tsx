@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { motion } from 'framer-motion';
 import { Check, Truck, Clock, AlertCircle } from 'lucide-react';
+import { sendOrderConfirmationEmail, formatOrderDetailsForEmail } from '../lib/emailConfig';
 
 interface OrderItem {
   id: string;
@@ -21,6 +22,8 @@ interface Order {
   updated_at: string;
 }
 
+const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER;
+
 export default function OrderManagement() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +34,24 @@ export default function OrderManagement() {
   useEffect(() => {
     checkAdminStatus();
     fetchOrders();
+    // Echtzeit-Updates für neue Bestellungen
+    const subscription = supabase
+      .channel('orders')
+      .on('postgres_changes', 
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'orders' 
+        }, 
+        payload => {
+          handleNewOrder(payload.new as Order);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const checkAdminStatus = async () => {
@@ -87,6 +108,46 @@ export default function OrderManagement() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleNewOrder = async (order: Order) => {
+    // Aktualisiere die lokale Liste
+    setOrders(prev => [order, ...prev]);
+    
+    // Sende Email-Benachrichtigung
+    await sendEmailNotification(order);
+    
+    // Sende WhatsApp-Benachrichtigung
+    await sendWhatsAppNotification(order);
+  };
+
+  const sendEmailNotification = async (order: Order) => {
+    const emailParams = {
+      to_email: import.meta.env.VITE_NOTIFICATION_EMAIL,
+      order_number: order.id,
+      order_details: formatOrderDetailsForEmail(order.items),
+      total: order.total.toFixed(2),
+      customer_name: userEmails[order.user_id] || 'Unbekannt',
+      delivery_address: ''
+    };
+
+    const result = await sendOrderConfirmationEmail(emailParams);
+    if (!result.success) {
+      console.error('Failed to send order confirmation email:', result.error);
+    }
+  };
+
+  const sendWhatsAppNotification = async (order: Order) => {
+    if (!WHATSAPP_NUMBER) return;
+
+    const message = `🆕 Neue Bestellung #${order.id}\n\n` +
+                    `📋 Bestellung:\n${order.items.map(item => `${item.quantity}x ${item.name} - ${item.price.toFixed(2)}€`).join('\n')}\n\n` +
+                    `💶 Gesamt: ${order.total.toFixed(2)}€\n` +
+                    `👤 Kunde: ${userEmails[order.user_id] || 'Unbekannt'}`;
+    const whatsappUrl = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=${encodeURIComponent(message)}`;
+    
+    // Öffne WhatsApp im Browser
+    window.open(whatsappUrl, '_blank');
   };
 
   const updateOrderStatus = async (orderId: string, newStatus: Order['status']) => {

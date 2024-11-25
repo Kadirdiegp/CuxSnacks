@@ -8,6 +8,7 @@ export interface Product {
   stock: number;
   rating: number;
   reviews: Review[];
+  discount?: number;
 }
 
 export interface Review {

@@ -1,18 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Sliders } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { Sliders } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
 
 interface ProductFiltersProps {
-  minPrice: number;
-  maxPrice: number;
-  setMinPrice: (price: number) => void;
-  setMaxPrice: (price: number) => void;
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
   selectedCategory: string | null;
-  setSelectedCategory: (category: string | null) => void;
+  onCategoryChange: (category: string | null) => void;
 }
 
 interface Category {
@@ -21,16 +14,10 @@ interface Category {
 }
 
 export default function ProductFilters({
-  minPrice,
-  maxPrice,
-  setMinPrice,
-  setMaxPrice,
-  searchQuery,
-  setSearchQuery,
   selectedCategory,
-  setSelectedCategory,
+  onCategoryChange,
 }: ProductFiltersProps) {
-  const [isOpen, setIsOpen] = React.useState(true);
+  const [isOpen, setIsOpen] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
@@ -55,10 +42,10 @@ export default function ProductFilters({
     <motion.div
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
-      className="bg-zinc-900 p-6 rounded-xl shadow-lg mb-8"
+      className="bg-zinc-900 p-6 rounded-xl shadow-lg"
     >
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-white">Filter</h2>
+        <h2 className="text-xl font-semibold text-white">Kategorien</h2>
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
@@ -73,98 +60,32 @@ export default function ProductFilters({
         initial={false}
         animate={{ height: isOpen ? 'auto' : 0 }}
         transition={{ duration: 0.3 }}
-        className="space-y-6 overflow-hidden"
+        className="space-y-4 overflow-hidden"
       >
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 w-5 h-5" />
-          <motion.input
-            whileFocus={{ scale: 1.02 }}
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Produkte suchen..."
-            className="w-full bg-zinc-800 text-white pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 transition-all"
-          />
-        </div>
-
-        <div className="space-y-4">
-          <h3 className="text-white font-medium">Preisbereich</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-zinc-400 mb-1">Min. Preis</label>
-              <motion.input
-                whileFocus={{ scale: 1.02 }}
-                type="number"
-                value={minPrice}
-                onChange={(e) => {
-                  const value = Number(e.target.value);
-                  if (value <= maxPrice) {
-                    setMinPrice(value);
-                  }
-                }}
-                min={0}
-                className="w-full bg-zinc-800 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-zinc-400 mb-1">Max. Preis</label>
-              <motion.input
-                whileFocus={{ scale: 1.02 }}
-                type="number"
-                value={maxPrice}
-                onChange={(e) => {
-                  const value = Number(e.target.value);
-                  if (value >= minPrice) {
-                    setMaxPrice(value);
-                  }
-                }}
-                min={minPrice}
-                className="w-full bg-zinc-800 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 transition-all"
-              />
-            </div>
-          </div>
-          
-          <div className="relative pt-1">
-            <div className="h-1 bg-zinc-800 rounded-full">
-              <motion.div
-                initial={false}
-                animate={{
-                  left: `${(minPrice / 1000) * 100}%`,
-                  right: `${100 - (maxPrice / 1000) * 100}%`
-                }}
-                className="absolute h-full bg-white rounded-full"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <h3 className="text-white font-medium">Kategorien</h3>
-          <div className="space-y-2">
+        <div className="space-y-2">
+          <button
+            onClick={() => onCategoryChange(null)}
+            className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+              selectedCategory === null
+                ? 'bg-white text-black'
+                : 'text-white hover:bg-zinc-800'
+            }`}
+          >
+            Alle Produkte
+          </button>
+          {categories.map((category) => (
             <button
-              onClick={() => setSelectedCategory(null)}
-              className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
-                selectedCategory === null
-                  ? 'bg-white/20 text-white'
-                  : 'text-zinc-400 hover:bg-white/10 hover:text-white'
+              key={category.id}
+              onClick={() => onCategoryChange(category.name)}
+              className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                selectedCategory === category.name
+                  ? 'bg-white text-black'
+                  : 'text-white hover:bg-zinc-800'
               }`}
             >
-              Alle Kategorien
+              {category.name}
             </button>
-            {categories.map((category) => (
-              <button
-                key={category.id}
-                onClick={() => setSelectedCategory(category.name)}
-                className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
-                  selectedCategory === category.name
-                    ? 'bg-white/20 text-white'
-                    : 'text-zinc-400 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                {category.name}
-              </button>
-            ))}
-          </div>
+          ))}
         </div>
       </motion.div>
     </motion.div>

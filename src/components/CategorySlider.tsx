@@ -92,16 +92,7 @@ export default function CategorySlider() {
   };
 
   const handleCategoryClick = (categoryName: string) => {
-    controls.start({
-      scale: 0.95,
-      transition: { duration: 0.1 }
-    }).then(() => {
-      controls.start({
-        scale: 1,
-        transition: { duration: 0.1 }
-      });
-      navigate(`/products?category=${encodeURIComponent(categoryName)}`);
-    });
+    navigate(`/products?category=${categoryName}`);
   };
 
   if (categories.length === 0) return null;
@@ -109,65 +100,59 @@ export default function CategorySlider() {
   return (
     <div className="relative w-full max-w-7xl mx-auto px-4">
       <div className="flex items-center space-x-4">
-        <AnimatePresence>
-          {showLeftArrow && (
-            <motion.button
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              onClick={() => scroll('left')}
-              className="hidden md:flex items-center justify-center w-8 h-8 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors backdrop-blur-sm"
-              aria-label="Scroll left"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </motion.button>
-          )}
-        </AnimatePresence>
+        <div className="relative w-full">
+          {/* Left Arrow */}
+          <AnimatePresence>
+            {showLeftArrow && (
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => scroll('left')}
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/10 backdrop-blur-sm hover:bg-white/20 transition-colors"
+              >
+                <ChevronLeft className="w-6 h-6 text-white" />
+              </motion.button>
+            )}
+          </AnimatePresence>
 
-        <div
-          ref={containerRef}
-          className="flex-1 overflow-x-auto hide-scrollbar"
-          onMouseDown={handleMouseDown}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onMouseMove={handleMouseMove}
-          style={{
-            cursor: isDragging ? 'grabbing' : 'grab',
-            WebkitOverflowScrolling: 'touch',
-          }}
-        >
-          <motion.div 
-            className="flex gap-3 py-2 px-1"
-            animate={controls}
+          {/* Category List */}
+          <div
+            ref={containerRef}
+            className="flex gap-4 overflow-x-auto scrollbar-none px-6 py-2"
           >
             {categories.map((category) => (
               <motion.button
                 key={category.id}
                 onClick={() => handleCategoryClick(category.name)}
-                className="flex-none px-6 py-2.5 rounded-full bg-white/10 text-white hover:bg-white/20 transition-all backdrop-blur-sm text-sm font-medium"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                whileHover={{ 
+                  y: -5,
+                  scale: 1.02,
+                  boxShadow: "0 15px 20px -5px rgba(0, 0, 0, 0.1), 0 8px 8px -5px rgba(0, 0, 0, 0.04)"
+                }}
+                transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                className="flex-none px-6 py-3 rounded-xl whitespace-nowrap backdrop-blur-sm bg-gradient-to-r from-zinc-800/5 via-zinc-800/10 to-zinc-800/5 ring-1 ring-inset ring-white/10 text-white/90 hover:text-white"
               >
                 {category.name}
               </motion.button>
             ))}
-          </motion.div>
-        </div>
+          </div>
 
-        <AnimatePresence>
-          {showRightArrow && (
-            <motion.button
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-              onClick={() => scroll('right')}
-              className="hidden md:flex items-center justify-center w-8 h-8 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors backdrop-blur-sm"
-              aria-label="Scroll right"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </motion.button>
-          )}
-        </AnimatePresence>
+          {/* Right Arrow */}
+          <AnimatePresence>
+            {showRightArrow && (
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => scroll('right')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/10 backdrop-blur-sm hover:bg-white/20 transition-colors"
+              >
+                <ChevronRight className="w-6 h-6 text-white" />
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     </div>
   );
